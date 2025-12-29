@@ -1,0 +1,65 @@
+name: Auto Story Video
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 19 * * *" # 22:00 România (UTC)
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Debug – list all files
+        run: |
+          echo "=== ROOT FILES ==="
+          ls -la
+          echo "=== SCRIPTS FOLDER ==="
+          ls -la scripts || echo "NO scripts folder found"
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests
+
+      - name: Fetch Reddit title
+        run: |
+          mkdir -p meta
+          python scripts/fetch_title.py > meta/title.txt
+
+      - name: Generate story
+        run: |
+          python scripts/make_story.py meta/title.txt > meta/story.txt
+
+      - name: Generate scenes
+        run: |
+          python scripts/make_scenes.py meta/story.txt > meta/scenes.json
+
+      - name: Install audio + video tools
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y espeak ffmpeg fonts-dejavu-core jq
+
+      - name: Generate audio (TTS)
+        run: |
+          mkdir -p outputs
+          espeak -w outputs/audio.wav "$(cat meta/story.txt)"
+
+      - name: Render video
+        run: |
+          chmod +x scripts/render_video.sh
+          bash scripts/render_video.sh
+
+      - name: Upload video artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-video
+          path: outputs/video.mp4
